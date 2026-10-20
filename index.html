@@ -1,0 +1,1996 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finanzas & Menú Inteligente - Control de Economía Personal</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            900: '#064e3b',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        /* Scrollbar personalizada */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .tab-active {
+            background-color: #059669;
+            color: white;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
+        }
+        .day-active {
+            background-color: #0f172a;
+            color: white;
+            border-color: #0f172a;
+        }
+        @keyframes slideIn {
+            from { transform: translateY(10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-slide-in {
+            animation: slideIn 0.25s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col pb-24 md:pb-12">
+
+    <!-- Notificación Toast Flotante -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Modal de Confirmación Genérico (Sin alert/confirm nativo) -->
+    <div id="confirm-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-slide-in">
+            <div class="flex items-center gap-3 text-amber-600 mb-3">
+                <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-triangle-exclamation text-lg"></i>
+                </div>
+                <h3 id="confirm-title" class="text-lg font-bold text-slate-900">Confirmar Acción</h3>
+            </div>
+            <p id="confirm-message" class="text-slate-600 text-sm mb-6 leading-relaxed"></p>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeConfirmModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm transition">
+                    Cancelar
+                </button>
+                <button id="confirm-action-btn" class="px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-medium text-sm transition shadow-sm">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Abono a Deuda -->
+    <div id="payment-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-slide-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-hand-holding-dollar text-emerald-600"></i>
+                    Registrar Abono a Deuda
+                </h3>
+                <button onclick="closePaymentModal()" class="text-slate-400 hover:text-slate-600 w-8 h-8 rounded-full flex items-center justify-center">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p id="payment-debt-name" class="text-sm font-semibold text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl mb-4"></p>
+            
+            <form id="payment-form" onsubmit="submitDebtPayment(event)" class="space-y-4">
+                <input type="hidden" id="payment-debt-id">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Monto a abonar ($ MXN)</label>
+                    <input type="number" id="payment-amount" step="0.01" min="1" required
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold text-slate-800"
+                        placeholder="Ej. 500.00">
+                    <p id="payment-remaining-hint" class="text-xs text-slate-400 mt-1"></p>
+                </div>
+
+                <label class="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+                    <input type="checkbox" id="payment-deduct-balance" checked class="mt-1 w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
+                    <span class="text-xs text-slate-700 leading-relaxed">
+                        <strong>Descontar de mi saldo actual del periodo</strong><br>
+                        <span class="text-slate-500">Se registrará como abono en el resumen de tu quincena/semana actual.</span>
+                    </span>
+                </label>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closePaymentModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm transition">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm transition shadow-md">
+                        Guardar Abono
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Lista de Supermercado -->
+    <div id="shopping-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 animate-slide-in">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-cart-shopping text-emerald-600"></i>
+                        Lista de Supermercado Semanal
+                    </h3>
+                    <p class="text-xs text-slate-500">Todos los ingredientes requeridos de Lunes a Domingo</p>
+                </div>
+                <button onclick="closeShoppingModal()" class="text-slate-400 hover:text-slate-600 w-8 h-8 rounded-full flex items-center justify-center bg-slate-100">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div id="shopping-list-container" class="p-5 overflow-y-auto space-y-2 flex-1">
+                <!-- Generado dinámicamente -->
+            </div>
+
+            <div class="p-4 bg-slate-50 border-t border-slate-100 rounded-b-2xl flex flex-wrap justify-between items-center gap-3">
+                <div class="text-sm">
+                    <span class="text-slate-500">Total en Lista:</span>
+                    <span id="shopping-modal-total" class="font-bold text-slate-900 ml-1">$0.00</span>
+                    <span class="text-xs text-emerald-600 font-medium ml-2" id="shopping-modal-checked">($0.00 comprados)</span>
+                </div>
+                <button onclick="closeShoppingModal()" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition">
+                    Cerrar Lista
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Encabezado Principal -->
+    <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-600/30">
+                            <i class="fa-solid fa-wallet text-xl text-white"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight flex items-center gap-2">
+                                Mi Economía & Menú
+                                <span class="text-[11px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">MXN</span>
+                            </h1>
+                            <p class="text-xs text-slate-400">Control de Salario, Gastos Hormiga, Comidas y Deudas</p>
+                        </div>
+                    </div>
+                    <!-- Botón Respaldo Móvil -->
+                    <button onclick="switchTab('tips')" class="md:hidden text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl border border-slate-700">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+
+                <!-- Navegación por Pestañas (Desktop & Tablet) -->
+                <nav class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+                    <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="tab-active px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2 shrink-0">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <span>1. Salario y Hormiga</span>
+                    </button>
+                    <button onclick="switchTab('meals')" id="tab-btn-meals" class="text-slate-300 hover:text-white hover:bg-slate-800 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2 shrink-0">
+                        <i class="fa-solid fa-utensils"></i>
+                        <span>2. Menú L-D</span>
+                    </button>
+                    <button onclick="switchTab('debts')" id="tab-btn-debts" class="text-slate-300 hover:text-white hover:bg-slate-800 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2 shrink-0">
+                        <i class="fa-solid fa-credit-card"></i>
+                        <span>3. Deudas</span>
+                    </button>
+                    <button onclick="switchTab('tips')" id="tab-btn-tips" class="text-slate-300 hover:text-white hover:bg-slate-800 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2 shrink-0">
+                        <i class="fa-solid fa-lightbulb"></i>
+                        <span>4. Tips y Hábitos</span>
+                    </button>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Contenedor Principal -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+        <!-- BARRA FINANCIERA GLOBAL (Siempre visible para saber cuánto queda en la quincena/semana) -->
+        <section class="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-200/80">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div>
+                    <span id="current-period-badge" class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                        <i class="fa-solid fa-calendar-check"></i> Modalidad: Quincenal
+                    </span>
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mt-1">Resumen de tu Dinero Disponible</h2>
+                </div>
+                
+                <!-- Barra de Salud del Saldo -->
+                <div class="w-full lg:w-80 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                    <div class="flex justify-between text-xs font-semibold mb-1.5">
+                        <span id="balance-status-text" class="text-slate-600">Saldo Disponible</span>
+                        <span id="balance-percentage-text" class="text-emerald-600 font-bold">100% libre</span>
+                    </div>
+                    <div class="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
+                        <div id="balance-progress-bar" class="h-full bg-emerald-500 transition-all duration-500 rounded-full" style="width: 100%"></div>
+                    </div>
+                    <p id="balance-warning-msg" class="text-[11px] text-slate-500 mt-1.5">Tu presupuesto se encuentra saludable.</p>
+                </div>
+            </div>
+
+            <!-- Tarjetas de Resumen en Tiempo Real -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mt-4">
+                <!-- Ingreso del Periodo -->
+                <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-200/70">
+                    <div class="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
+                        <span>Ingreso (<span id="card-period-label">Quincena</span>)</span>
+                        <i class="fa-solid fa-money-bill-wave text-emerald-600"></i>
+                    </div>
+                    <p id="summary-income" class="text-lg sm:text-xl font-extrabold text-slate-900">$0.00</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Base configurada</p>
+                </div>
+
+                <!-- Gasto en Comidas -->
+                <div class="bg-orange-50/60 rounded-xl p-3.5 border border-orange-200/70">
+                    <div class="flex items-center justify-between text-orange-800 text-xs font-medium mb-1">
+                        <span>Comidas (L-D)</span>
+                        <i class="fa-solid fa-bowl-food text-orange-500"></i>
+                    </div>
+                    <p id="summary-meals" class="text-lg sm:text-xl font-extrabold text-orange-700">$0.00</p>
+                    <p id="summary-meals-status" class="text-[11px] text-orange-600/80 mt-0.5">Descontando del saldo</p>
+                </div>
+
+                <!-- Gastos Hormiga -->
+                <div class="bg-rose-50/60 rounded-xl p-3.5 border border-rose-200/70">
+                    <div class="flex items-center justify-between text-rose-800 text-xs font-medium mb-1">
+                        <span>Gastos Hormiga</span>
+                        <i class="fa-solid fa-bug text-rose-500"></i>
+                    </div>
+                    <p id="summary-ant" class="text-lg sm:text-xl font-extrabold text-rose-700">$0.00</p>
+                    <p id="summary-ant-percent" class="text-[11px] text-rose-600/80 mt-0.5">0% de tu ingreso</p>
+                </div>
+
+                <!-- Gastos Diarios / Fijos + Abonos Deuda -->
+                <div class="bg-indigo-50/60 rounded-xl p-3.5 border border-indigo-200/70">
+                    <div class="flex items-center justify-between text-indigo-800 text-xs font-medium mb-1">
+                        <span>Diarios y Abonos</span>
+                        <i class="fa-solid fa-receipt text-indigo-500"></i>
+                    </div>
+                    <p id="summary-other-debt" class="text-lg sm:text-xl font-extrabold text-indigo-700">$0.00</p>
+                    <p id="summary-debt-sub" class="text-[11px] text-indigo-600/80 mt-0.5">Incluye abonos a deuda</p>
+                </div>
+
+                <!-- Saldo Restante Disponible -->
+                <div id="remaining-card" class="col-span-2 md:col-span-1 bg-emerald-600 text-white rounded-xl p-3.5 shadow-md shadow-emerald-600/20 flex flex-col justify-between">
+                    <div class="flex items-center justify-between text-emerald-100 text-xs font-semibold mb-1">
+                        <span>SALDO RESTANTE</span>
+                        <i class="fa-solid fa-vault"></i>
+                    </div>
+                    <p id="summary-remaining" class="text-xl sm:text-2xl font-black tracking-tight">$0.00</p>
+                    <p id="summary-daily-allowance" class="text-[11px] text-emerald-100 mt-0.5">Disponible para usar</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             PUNTO 1: SALARIO, GASTOS HORMIGA Y DIARIOS
+             ========================================== -->
+        <section id="section-dashboard" class="space-y-6 animate-slide-in">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Columna Izquierda: Configurar Salario + Nuevo Gasto -->
+                <div class="lg:col-span-5 space-y-6">
+                    <!-- Configurar Salario por Periodo -->
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+                        <div class="flex items-center gap-2.5 mb-4">
+                            <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                                <i class="fa-solid fa-sack-dollar"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-slate-900">1. Configurar mi Salario</h3>
+                                <p class="text-xs text-slate-500">Elige cómo recibes tu dinero para descontar tus gastos</p>
+                            </div>
+                        </div>
+
+                        <form onsubmit="saveSalaryConfig(event)" class="space-y-4">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Modalidad de Pago</label>
+                                    <select id="income-period" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-semibold text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                        <option value="Diario">Por Día</option>
+                                        <option value="Semanal">Semanal (7 días)</option>
+                                        <option value="Quincenal" selected>Quincenal (15 días)</option>
+                                        <option value="Mensual">Mensual (30 días)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Monto de Ingreso ($)</label>
+                                    <input type="number" id="income-amount" step="0.01" min="0" required
+                                        class="w-full px-3 py-2.5 rounded-xl border border-slate-200 font-bold text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                        placeholder="Ej. 6500">
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-sm">
+                                <i class="fa-solid fa-floppy-disk"></i> Actualizar Salario del Periodo
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Formulario de Gastos Hormiga y Gastos Diarios -->
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
+                                    <i class="fa-solid fa-bug"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-900">Registrar Gasto Hormiga o Diario</h3>
+                                    <p class="text-xs text-slate-500">Identifica en qué se va tu dinero día a día</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botones Rápidos de Gastos Hormiga Comunes -->
+                        <div class="mb-4">
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Carga rápida de gasto hormiga:</p>
+                            <div class="flex flex-wrap gap-1.5">
+                                <button type="button" onclick="quickFillAnt('Café / Frappé', 'Cafe', 45)" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 rounded-lg border border-rose-200 transition">☕ Café $45</button>
+                                <button type="button" onclick="quickFillAnt('Refresco / Agua', 'Antojo', 22)" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 rounded-lg border border-rose-200 transition">🥤 Refresco $22</button>
+                                <button type="button" onclick="quickFillAnt('Pan dulce / Galletas', 'Antojo', 25)" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 rounded-lg border border-rose-200 transition">🥐 Pan/Galletas $25</button>
+                                <button type="button" onclick="quickFillAnt('Botana / Papitas', 'Antojo', 30)" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 rounded-lg border border-rose-200 transition">🍟 Botana $30</button>
+                                <button type="button" onclick="quickFillAnt('Propina / Viene-viene', 'Propina', 15)" class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 rounded-lg border border-rose-200 transition">🪙 Propina $15</button>
+                            </div>
+                        </div>
+
+                        <form id="expense-form" onsubmit="addExpense(event)" class="space-y-3.5">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Concepto del gasto</label>
+                                <input type="text" id="exp-concept" required
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    placeholder="Ej. Café de la mañana, Uber, Suscripción, Pasaje...">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Tipo / Categoría</label>
+                                    <select id="exp-category" class="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                        <optgroup label="🐜 Gastos Hormiga (Fugas)">
+                                            <option value="Antojo">🍫 Antojo / Botana / Refresco</option>
+                                            <option value="Cafe">☕ Café / Bebida en calle</option>
+                                            <option value="Propina">🪙 Propina / Cambio suelto</option>
+                                            <option value="Comision">💳 Comisión / Envío / App</option>
+                                            <option value="Impulso">🛍️ Compra por impulso</option>
+                                        </optgroup>
+                                        <optgroup label="📌 Gastos Diarios / Necesarios">
+                                            <option value="Transporte">🚌 Transporte / Gasolina</option>
+                                            <option value="Servicios">💡 Servicios / Recarga celular</option>
+                                            <option value="Salud">💊 Salud / Higiene</option>
+                                            <option value="Hogar">🏠 Hogar / Otros fijos</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Monto ($ MXN)</label>
+                                    <input type="number" id="exp-amount" step="0.01" min="0.5" required
+                                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                        placeholder="0.00">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Fecha</label>
+                                <input type="date" id="exp-date" required
+                                    class="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            </div>
+
+                            <button type="submit" class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20">
+                                <i class="fa-solid fa-plus-circle"></i> Descontar Gasto de mi Saldo
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Columna Derecha: Detector de Gastos Hormiga y Historial -->
+                <div class="lg:col-span-7 space-y-6">
+                    <!-- Radiografía de Gastos Hormiga -->
+                    <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-md">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                            <div>
+                                <span class="text-[11px] uppercase tracking-wider font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-0.5 rounded-full">
+                                    Detector de Fugas de Dinero
+                                </span>
+                                <h3 class="text-lg font-bold mt-1">Impacto de tus Gastos Hormiga</h3>
+                            </div>
+                            <div class="text-left sm:text-right">
+                                <p class="text-xs text-slate-400">Total en Gastos Hormiga</p>
+                                <p id="ant-detector-total" class="text-2xl font-black text-rose-400">$0.00</p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                            <div class="bg-white/5 border border-white/10 rounded-xl p-3">
+                                <span class="text-slate-400 block">% de tu Salario</span>
+                                <strong id="ant-detector-percent" class="text-base text-white">0%</strong>
+                                <span class="text-[11px] text-slate-400 block mt-0.5">Ideal: mantener bajo 5%</span>
+                            </div>
+                            <div class="bg-white/5 border border-white/10 rounded-xl p-3">
+                                <span class="text-slate-400 block">Equivale en Comidas</span>
+                                <strong id="ant-detector-meals-eq" class="text-base text-amber-300">0 platillos</strong>
+                                <span class="text-[11px] text-slate-400 block mt-0.5">Calculado según tu menú</span>
+                            </div>
+                            <div class="bg-white/5 border border-white/10 rounded-xl p-3">
+                                <span class="text-slate-400 block">Proyección al Mes</span>
+                                <strong id="ant-detector-projection" class="text-base text-emerald-300">$0.00</strong>
+                                <span class="text-[11px] text-slate-400 block mt-0.5">Si mantienes este ritmo</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Lista de Gastos Registrados -->
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                            <div>
+                                <h3 class="font-bold text-slate-900">Historial de Gastos del Periodo</h3>
+                                <p class="text-xs text-slate-500">Filtra para distinguir gastos hormiga de gastos necesarios</p>
+                            </div>
+                            <div class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+                                <button onclick="setExpenseFilter('all')" id="filter-exp-all" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-900 shadow-sm transition">Todos</button>
+                                <button onclick="setExpenseFilter('ant')" id="filter-exp-ant" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition">🐜 Hormiga</button>
+                                <button onclick="setExpenseFilter('daily')" id="filter-exp-daily" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition">📌 Diarios</button>
+                            </div>
+                        </div>
+
+                        <div id="expenses-list" class="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             PUNTO 2: ORGANIZADOR DE COMIDAS (LUNES A DOMINGO)
+             ========================================== -->
+        <section id="section-meals" class="space-y-6 hidden animate-slide-in">
+            <!-- Cabecera del Planificador de Comidas -->
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-wider text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200">
+                        Planificador Lunes a Domingo
+                    </span>
+                    <h2 class="text-xl font-bold text-slate-900 mt-1">Organizador de Comidas e Ingredientes</h2>
+                    <p class="text-xs text-slate-500">Registra cada platillo y los productos que necesitas comprar para saber exactamente cuánto cuesta cada comida.</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Switch Descontar del Salario -->
+                    <label class="flex items-center gap-2.5 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200 cursor-pointer">
+                        <input type="checkbox" id="deduct-meals-toggle" onchange="toggleDeductMeals()" checked class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
+                        <div class="text-xs">
+                            <span class="font-bold text-slate-800 block">Descontar comidas de mi saldo</span>
+                            <span class="text-slate-500 text-[11px]">Resta el total semanal de tu ingreso</span>
+                        </div>
+                    </label>
+
+                    <!-- Botón Ver Lista de Supermercado -->
+                    <button onclick="openShoppingModal()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold transition flex items-center gap-2 shadow-md shadow-emerald-600/20">
+                        <i class="fa-solid fa-cart-Flatbed-suitcase"></i>
+                        <i class="fa-solid fa-list-check"></i>
+                        <span>Lista de Compras (<span id="shopping-count-badge">0</span>)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Selector de Días (Lunes a Domingo) y Resumen por Día -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5" id="days-selector-container">
+                <!-- Generado por JS -->
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Columna Izquierda: Agregar Comida e Ingredientes al Día Seleccionado -->
+                <div class="lg:col-span-5 space-y-5">
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+                        <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-bold">
+                                    <i class="fa-solid fa-utensils"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-900">Agregar Comida al <span id="form-selected-day-label" class="text-orange-600">Lunes</span></h3>
+                                    <p class="text-xs text-slate-500">Añade el platillo y los productos a comprar</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <form id="meal-form" onsubmit="addMealToDay(event)" class="space-y-4">
+                            <div class="grid grid-cols-3 gap-3">
+                                <div class="col-span-1">
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Tiempo</label>
+                                    <select id="meal-type" class="w-full px-2.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500">
+                                        <option value="Desayuno">🍳 Desayuno</option>
+                                        <option value="Comida" selected>🍲 Comida</option>
+                                        <option value="Cena">🌮 Cena</option>
+                                        <option value="Colación">🍎 Colación</option>
+                                    </select>
+                                </div>
+                                <div class="col-span-2">
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Nombre del Platillo / Alimento</label>
+                                    <input type="text" id="meal-name" required
+                                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        placeholder="Ej. Pollo a la plancha con arroz">
+                                </div>
+                            </div>
+
+                            <!-- Constructor rápido de productos para esta comida -->
+                            <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-basket-shopping text-orange-500"></i>
+                                        Productos / Ingredientes a comprar
+                                    </label>
+                                    <span id="draft-meal-subtotal" class="text-xs font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">Subtotal: $0.00</span>
+                                </div>
+
+                                <div class="flex gap-2">
+                                    <input type="text" id="draft-ing-name"
+                                        class="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        placeholder="Ej. Pechuga de pollo 1/2 kg">
+                                    <input type="number" id="draft-ing-cost" step="0.5" min="0"
+                                        class="w-24 px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                        placeholder="$ Costo">
+                                    <button type="button" onclick="addDraftIngredient()" class="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold transition shrink-0">
+                                        + Añadir
+                                    </button>
+                                </div>
+                                <p class="text-[11px] text-slate-400">Tip: Escribe el ingrediente y su precio, luego pulsa "+ Añadir" (o guarda directo si agregas ingredientes después).</p>
+
+                                <!-- Lista de ingredientes agregados al borrador -->
+                                <div id="draft-ingredients-list" class="space-y-1.5 max-h-36 overflow-y-auto"></div>
+                            </div>
+
+                            <button type="submit" class="w-full py-2.5 px-4 bg-orange-600 hover:bg-orange-700 text-white font-semibold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-orange-600/20">
+                                <i class="fa-solid fa-plus"></i> Guardar Comida en <span id="btn-selected-day-label">Lunes</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Tarjeta Resumen Semanal de Comidas -->
+                    <div class="bg-slate-900 text-white rounded-2xl p-5 shadow-md space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs uppercase tracking-wider font-bold text-orange-400">Estadísticas de Alimentación</span>
+                            <i class="fa-solid fa-chart-Simple text-slate-400"></i>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 pt-1">
+                            <div class="bg-white/5 p-3 rounded-xl border border-white/10">
+                                <span class="text-xs text-slate-400 block">Gasto en <span id="stat-day-name">Lunes</span></span>
+                                <strong id="stat-day-total" class="text-xl font-extrabold text-white">$0.00</strong>
+                            </div>
+                            <div class="bg-white/5 p-3 rounded-xl border border-white/10">
+                                <span class="text-xs text-slate-400 block">Gran Total Semanal (L-D)</span>
+                                <strong id="stat-week-total" class="text-xl font-extrabold text-orange-400">$0.00</strong>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center text-xs text-slate-300 pt-1 border-t border-white/10">
+                            <span>Costo promedio por comida registrada:</span>
+                            <strong id="stat-avg-meal" class="text-emerald-400 font-bold">$0.00</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Columna Derecha: Comidas e Ingredientes del Día Seleccionado -->
+                <div class="lg:col-span-7 space-y-4">
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 min-h-[480px] flex flex-col">
+                        <div class="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-slate-100">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                    <span>Menú del <span id="view-selected-day-title" class="text-orange-600">Lunes</span></span>
+                                </h3>
+                                <p class="text-xs text-slate-500">Puedes agregar más productos a comprar dentro de cada platillo</p>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-xs text-slate-400 block">Total del Día</span>
+                                <span id="view-selected-day-total" class="text-xl font-black text-slate-900">$0.00</span>
+                            </div>
+                        </div>
+
+                        <!-- Contenedor de platillos del día -->
+                        <div id="day-meals-container" class="space-y-4 flex-1">
+                            <!-- Renderizado por JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             PUNTO 3: CONTROL DE DEUDAS Y ABONOS
+             ========================================== -->
+        <section id="section-debts" class="space-y-6 hidden animate-slide-in">
+            <!-- Resumen de Deudas -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+                    <span class="text-xs font-semibold text-slate-500 uppercase">Deuda Total Registrada</span>
+                    <p id="debt-total-initial" class="text-2xl font-black text-slate-900 mt-1">$0.00</p>
+                    <p class="text-xs text-slate-400 mt-1">Suma de todos tus compromisos</p>
+                </div>
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+                    <span class="text-xs font-semibold text-emerald-600 uppercase">Total Ya Pagado / Abonado</span>
+                    <p id="debt-total-paid" class="text-2xl font-black text-emerald-600 mt-1">$0.00</p>
+                    <p class="text-xs text-slate-400 mt-1">Avance acumulado de tus pagos</p>
+                </div>
+                <div class="bg-slate-900 text-white rounded-2xl p-5 shadow-md">
+                    <span class="text-xs font-semibold text-rose-400 uppercase">Saldo Total Pendiente por Liquidar</span>
+                    <p id="debt-total-remaining" class="text-2xl font-black text-white mt-1">$0.00</p>
+                    <p id="debt-active-count" class="text-xs text-slate-400 mt-1">0 deudas activas</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Formulario para Agregar Deuda -->
+                <div class="lg:col-span-4">
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80 sticky top-24">
+                        <div class="flex items-center gap-2.5 mb-4">
+                            <div class="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                                <i class="fa-solid fa-file-invoice-dollar"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-slate-900">Agregar Nueva Deuda</h3>
+                                <p class="text-xs text-slate-500">Lleva el control de lo que debes y tus abonos</p>
+                            </div>
+                        </div>
+
+                        <form id="debt-form" onsubmit="addDebt(event)" class="space-y-3.5">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Acreedor / Nombre de la Deuda</label>
+                                <input type="text" id="debt-name" required
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="Ej. Tarjeta Nu, Préstamo Mamá, Coppel...">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Monto Total ($)</label>
+                                    <input type="number" id="debt-total" step="0.01" min="1" required
+                                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        placeholder="Ej. 3000">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Ya Abonado ($)</label>
+                                    <input type="number" id="debt-paid" step="0.01" min="0" value="0"
+                                        class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                        placeholder="0.00">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Fecha Límite o Día de Pago</label>
+                                <input type="text" id="debt-due" required
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="Ej. Día 15 de cada mes / 30 de Nov">
+                            </div>
+
+                            <button type="submit" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20">
+                                <i class="fa-solid fa-plus-circle"></i> Registrar Deuda
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Lista de Deudas Activas -->
+                <div class="lg:col-span-8">
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+                        <div class="mb-4">
+                            <h3 class="font-bold text-slate-900 text-lg">Mis Deudas y Compromisos</h3>
+                            <p class="text-xs text-slate-500">Haz clic en "Registrar Abono" cuando realices un pago para descontarlo de tu deuda y de tu quincena.</p>
+                        </div>
+
+                        <div id="debts-list" class="space-y-4">
+                            <!-- Generado por JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             PUNTO 4: ZONA DE TIPS Y HÁBITOS DE AHORRO
+             ========================================== -->
+        <section id="section-tips" class="space-y-6 hidden animate-slide-in">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Columna Izquierda: Hábitos Personales y Reglas Anti-Compras Innecesarias -->
+                <div class="lg:col-span-6 space-y-6">
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center font-bold">
+                                    <i class="fa-solid fa-shield-heart"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-900">Mis Hábitos y Recordatorios de Ahorro</h3>
+                                    <p class="text-xs text-slate-500">Marca los hábitos que estás cumpliendo esta semana</p>
+                                </div>
+                            </div>
+                            <span id="habits-progress-badge" class="text-xs font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">0/0 cumplidos</span>
+                        </div>
+
+                        <!-- Agregar Nuevo Recordatorio o Regla Personal -->
+                        <form onsubmit="addCustomHabit(event)" class="flex gap-2 mb-4">
+                            <input type="text" id="new-habit-input" required
+                                class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                placeholder="Escribe un hábito o recordatorio para no gastar de más...">
+                            <button type="submit" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold rounded-xl transition shrink-0">
+                                + Agregar
+                            </button>
+                        </form>
+
+                        <!-- Lista de Hábitos Interactivos -->
+                        <div id="habits-list" class="space-y-2.5">
+                            <!-- Generado por JS -->
+                        </div>
+                    </div>
+
+                    <!-- Test Rápido Anti-Compras por Impulso -->
+                    <div class="bg-gradient-to-br from-emerald-900 to-slate-900 text-white rounded-2xl p-5 shadow-md">
+                        <div class="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">
+                            <i class="fa-solid fa-stopwatch"></i> Filtro antes de gastar
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">¿A punto de comprar algo no planeado?</h3>
+                        <p class="text-xs text-slate-300 mb-4 leading-relaxed">
+                            Antes de sacar la cartera o pagar con tarjeta, hazte estas 4 preguntas rápidas:
+                        </p>
+                        <ul class="space-y-2 text-xs text-slate-200">
+                            <li class="flex items-center gap-2 bg-white/5 p-2.5 rounded-xl border border-white/10">
+                                <i class="fa-solid fa-circle-question text-emerald-400"></i>
+                                <span>1. ¿Lo necesito hoy o solo es un antojo del momento?</span>
+                            </li>
+                            <li class="flex items-center gap-2 bg-white/5 p-2.5 rounded-xl border border-white/10">
+                                <i class="fa-solid fa-clock text-emerald-400"></i>
+                                <span>2. ¿Cuántas horas de mi trabajo me cuesta pagar esto?</span>
+                            </li>
+                            <li class="flex items-center gap-2 bg-white/5 p-2.5 rounded-xl border border-white/10">
+                                <i class="fa-solid fa-utensils text-emerald-400"></i>
+                                <span>3. ¿Ya tengo comida preparada en casa que se puede echar a perder?</span>
+                            </li>
+                            <li class="flex items-center gap-2 bg-white/5 p-2.5 rounded-xl border border-white/10">
+                                <i class="fa-solid fa-calendar-day text-emerald-400"></i>
+                                <span>4. Si espero 48 horas para comprarlo, ¿seguiré queriéndolo igual?</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Columna Derecha: Consejos Prácticos y Gestión de Datos -->
+                <div class="lg:col-span-6 space-y-6">
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+                        <h3 class="font-bold text-slate-900 text-lg mb-1">Guía Práctica de Economía Personal</h3>
+                        <p class="text-xs text-slate-500 mb-4">Estrategias probadas para ahorrar en comidas y frenar gastos hormiga</p>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <div class="p-4 rounded-xl bg-orange-50/70 border border-orange-200/70">
+                                <div class="w-8 h-8 rounded-lg bg-orange-500 text-white flex items-center justify-center mb-2">
+                                    <i class="fa-solid fa-carrot"></i>
+                                </div>
+                                <h4 class="font-bold text-sm text-slate-900">Compra por Menú, no por Pasillo</h4>
+                                <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+                                    Nunca vayas al súper con hambre ni sin lista. Usa la pestaña <strong>Menú L-D</strong> para comprar exactamente los ingredientes de tus platillos y evitar que la verdura o carne se desperdicie.
+                                </p>
+                            </div>
+
+                            <div class="p-4 rounded-xl bg-rose-50/70 border border-rose-200/70">
+                                <div class="w-8 h-8 rounded-lg bg-rose-500 text-white flex items-center justify-center mb-2">
+                                    <i class="fa-solid fa-mug-hot"></i>
+                                </div>
+                                <h4 class="font-bold text-sm text-slate-900">Termo de Agua y Café en Casa</h4>
+                                <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+                                    Un café de $45 y una botella de agua/refresco de $20 diarios son <strong>$325 a la semana</strong> ($1,300 al mes). Llevar tu propio termo paga casi 2 días completos de supermercado.
+                                </p>
+                            </div>
+
+                            <div class="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200/70">
+                                <div class="w-8 h-8 rounded-lg bg-indigo-500 text-white flex items-center justify-center mb-2">
+                                    <i class="fa-solid fa-snowflake"></i>
+                                </div>
+                                <h4 class="font-bold text-sm text-slate-900">Cocina Base para 2 o 3 Días</h4>
+                                <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+                                    Cocinar arroz, frijoles o pollo deshebrado en una sola tanda ahorra gas, tiempo y evita que pidas comida por aplicación cuando llegas cansado del trabajo.
+                                </p>
+                            </div>
+
+                            <div class="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200/70">
+                                <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center mb-2">
+                                    <i class="fa-solid fa-piggy-bank"></i>
+                                </div>
+                                <h4 class="font-bold text-sm text-slate-900">Presupuesto Diario Visible</h4>
+                                <p class="text-xs text-slate-600 mt-1 leading-relaxed">
+                                    Al iniciar tu quincena, separa primero el dinero de tus comidas de la semana y algún abono a deuda. Lo que sobre es tu verdadero saldo libre.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mantenimiento del Periodo y Respaldo -->
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200/80">
+                        <h3 class="font-bold text-slate-900 mb-1">Administración de tus Datos</h3>
+                        <p class="text-xs text-slate-500 mb-4">Tus datos se guardan automáticamente en este navegador. También puedes iniciar una nueva quincena/semana o descargar una copia.</p>
+
+                        <div class="flex flex-wrap gap-2.5">
+                            <button onclick="confirmNewPeriod()" class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-2 shadow-sm">
+                                <i class="fa-solid fa-rotate"></i> Iniciar Nueva Quincena / Periodo
+                            </button>
+                            <button onclick="exportDataJSON()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-download"></i> Exportar Respaldo
+                            </button>
+                            <label class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition flex items-center gap-2 cursor-pointer">
+                                <i class="fa-solid fa-upload"></i> Importar Respaldo
+                                <input type="file" accept=".json" onchange="importDataJSON(event)" class="hidden">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Barra de Navegación Inferior Fija para Móviles -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 grid grid-cols-4 py-1.5 px-2 shadow-lg">
+        <button onclick="switchTab('dashboard')" id="mob-tab-dashboard" class="flex flex-col items-center justify-center py-1.5 rounded-xl text-emerald-600 font-bold text-[11px]">
+            <i class="fa-solid fa-chart-pie text-base mb-0.5"></i>
+            <span>Salario/Gastos</span>
+        </button>
+        <button onclick="switchTab('meals')" id="mob-tab-meals" class="flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-500 font-medium text-[11px]">
+            <i class="fa-solid fa-utensils text-base mb-0.5"></i>
+            <span>Menú L-D</span>
+        </button>
+        <button onclick="switchTab('debts')" id="mob-tab-debts" class="flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-500 font-medium text-[11px]">
+            <i class="fa-solid fa-credit-card text-base mb-0.5"></i>
+            <span>Deudas</span>
+        </button>
+        <button onclick="switchTab('tips')" id="mob-tab-tips" class="flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-500 font-medium text-[11px]">
+            <i class="fa-solid fa-lightbulb text-base mb-0.5"></i>
+            <span>Tips</span>
+        </button>
+    </nav>
+
+    <script>
+        // =====================================================
+        // ESTADO DE LA APLICACIÓN Y DATOS POR DEFECTO
+        // =====================================================
+        const STORAGE_KEY = 'economia_menu_inteligente_v1';
+        const DAYS_OF_WEEK = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+        const ANT_CATEGORIES = ['Antojo', 'Cafe', 'Propina', 'Comision', 'Impulso'];
+
+        let selectedDay = 'Lunes';
+        let currentExpenseFilter = 'all';
+        let draftIngredients = [];
+        let pendingConfirmCallback = null;
+
+        // Estado inicial amigable para que el usuario entienda de inmediato cómo funciona
+        const defaultState = {
+            income: {
+                period: 'Quincenal',
+                amount: 6500
+            },
+            settings: {
+                deductMealsFromBalance: true
+            },
+            expenses: [
+                { id: 'exp-1', concept: 'Café y pan camino al trabajo', category: 'Cafe', amount: 58, date: getTodayISO(), isAnt: true },
+                { id: 'exp-2', concept: 'Refresco y papitas en la tarde', category: 'Antojo', amount: 42, date: getTodayISO(), isAnt: true },
+                { id: 'exp-3', concept: 'Pasajes y transporte', category: 'Transporte', amount: 120, date: getTodayISO(), isAnt: false }
+            ],
+            meals: {
+                'Lunes': [
+                    {
+                        id: 'meal-101',
+                        type: 'Desayuno',
+                        name: 'Huevos a la mexicana con frijoles',
+                        ingredients: [
+                            { id: 'ing-1', name: 'Cono de huevo (parte proporcional)', cost: 28, bought: true },
+                            { id: 'ing-2', name: 'Jitomate, cebolla y chile serrano', cost: 22, bought: false },
+                            { id: 'ing-3', name: 'Tortillas 1/2 kg', cost: 12, bought: true }
+                        ]
+                    },
+                    {
+                        id: 'meal-102',
+                        type: 'Comida',
+                        name: 'Pechuga asada con arroz y ensalada',
+                        ingredients: [
+                            { id: 'ing-4', name: 'Pechuga de pollo 1/2 kg', cost: 75, bought: false },
+                            { id: 'ing-5', name: 'Arroz y verduras', cost: 30, bought: false }
+                        ]
+                    }
+                ],
+                'Martes': [],
+                'Miércoles': [],
+                'Jueves': [],
+                'Viernes': [],
+                'Sábado': [],
+                'Domingo': []
+            },
+            debts: [
+                {
+                    id: 'debt-1',
+                    name: 'Tarjeta de Crédito / Departamental',
+                    totalAmount: 3500,
+                    paidAmount: 1000,
+                    dueDate: 'Día 15 y 30 de cada mes'
+                }
+            ],
+            habits: [
+                { id: 'hab-1', text: 'Llevar mi propio termo de agua o café desde casa', completed: true },
+                { id: 'hab-2', text: 'Esperar 48 horas antes de hacer una compra no planeada', completed: false },
+                { id: 'hab-3', text: 'Revisar qué ingredientes tengo en el refri antes de comprar comida', completed: true },
+                { id: 'hab-4', text: 'Anotar cada moneda o billete suelto que gaste en la calle', completed: false }
+            ]
+        };
+
+        let appState = loadState();
+
+        function getTodayISO() {
+            const today = new Date();
+            return today.toISOString().split('T')[0];
+        }
+
+        function loadState() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // Asegurar que existan todos los días
+                    DAYS_OF_WEEK.forEach(d => {
+                        if (!parsed.meals[d]) parsed.meals[d] = [];
+                    });
+                    return parsed;
+                }
+            } catch (e) {
+                console.error('Error cargando localStorage:', e);
+            }
+            return JSON.parse(JSON.stringify(defaultState));
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            } catch (e) {
+                console.error('Error guardando estado:', e);
+            }
+            renderAll();
+        }
+
+        // Formateador de Moneda MXN
+        function formatMXN(value) {
+            const num = Number(value) || 0;
+            return num.toLocaleString('es-MX', {
+                style: 'currency',
+                currency: 'MXN',
+                minimumFractionDigits: 2
+            });
+        }
+
+        // Notificación Toast
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'bg-slate-900 text-white border-emerald-500',
+                warning: 'bg-amber-600 text-white border-amber-300',
+                danger: 'bg-rose-600 text-white border-rose-300'
+            };
+            const icons = {
+                success: 'fa-circle-check text-emerald-400',
+                warning: 'fa-triangle-exclamation text-white',
+                danger: 'fa-trash-can text-white'
+            };
+
+            toast.className = `${colors[type] || colors.success} border-l-4 px-4 py-3 rounded-xl shadow-xl text-xs sm:text-sm font-medium flex items-center gap-2.5 animate-slide-in pointer-events-auto`;
+            toast.innerHTML = `<i class="fa-solid ${icons[type] || icons.success}"></i> <span>${message}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 2800);
+        }
+
+        // Modal de Confirmación Personalizado
+        function openConfirmModal(title, message, onConfirm) {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            pendingConfirmCallback = onConfirm;
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeConfirmModal() {
+            const modal = document.getElementById('confirm-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            pendingConfirmCallback = null;
+        }
+
+        document.getElementById('confirm-action-btn').addEventListener('click', () => {
+            if (typeof pendingConfirmCallback === 'function') {
+                pendingConfirmCallback();
+            }
+            closeConfirmModal();
+        });
+
+        // =====================================================
+        // NAVEGACIÓN ENTRE PESTAÑAS
+        // =====================================================
+        function switchTab(tabName) {
+            const tabs = ['dashboard', 'meals', 'debts', 'tips'];
+            tabs.forEach(t => {
+                const sec = document.getElementById(`section-${t}`);
+                const btn = document.getElementById(`tab-btn-${t}`);
+                const mobBtn = document.getElementById(`mob-tab-${t}`);
+
+                if (t === tabName) {
+                    sec.classList.remove('hidden');
+                    btn.classList.add('tab-active');
+                    btn.classList.remove('text-slate-300', 'hover:bg-slate-800');
+                    if (mobBtn) {
+                        mobBtn.classList.add('text-emerald-600', 'font-bold');
+                        mobBtn.classList.remove('text-slate-500', 'font-medium');
+                    }
+                } else {
+                    sec.classList.add('hidden');
+                    btn.classList.remove('tab-active');
+                    btn.classList.add('text-slate-300', 'hover:bg-slate-800');
+                    if (mobBtn) {
+                        mobBtn.classList.remove('text-emerald-600', 'font-bold');
+                        mobBtn.classList.add('text-slate-500', 'font-medium');
+                    }
+                }
+            });
+        }
+
+        // =====================================================
+        // CÁLCULOS FINANCIEROS GLOBALES
+        // =====================================================
+        function calculateTotals() {
+            const income = Number(appState.income.amount) || 0;
+
+            // Total de Comidas de Lunes a Domingo
+            let totalMealsCost = 0;
+            let totalMealsCount = 0;
+            let totalIngredientsCount = 0;
+
+            DAYS_OF_WEEK.forEach(day => {
+                const dayMeals = appState.meals[day] || [];
+                dayMeals.forEach(meal => {
+                    totalMealsCount++;
+                    (meal.ingredients || []).forEach(ing => {
+                        totalMealsCost += Number(ing.cost) || 0;
+                        totalIngredientsCount++;
+                    });
+                });
+            });
+
+            // Total Gastos Hormiga vs Gastos Diarios/Abonos
+            let antExpenses = 0;
+            let dailyExpenses = 0;
+            let debtPaymentsInPeriod = 0;
+
+            appState.expenses.forEach(exp => {
+                const amt = Number(exp.amount) || 0;
+                if (exp.isAnt || ANT_CATEGORIES.includes(exp.category)) {
+                    antExpenses += amt;
+                } else if (exp.category === 'AbonoDeuda') {
+                    debtPaymentsInPeriod += amt;
+                } else {
+                    dailyExpenses += amt;
+                }
+            });
+
+            const mealsDeducted = appState.settings.deductMealsFromBalance ? totalMealsCost : 0;
+            const totalSpent = mealsDeducted + antExpenses + dailyExpenses + debtPaymentsInPeriod;
+            const remaining = income - totalSpent;
+
+            return {
+                income,
+                totalMealsCost,
+                totalMealsCount,
+                totalIngredientsCount,
+                antExpenses,
+                dailyExpenses,
+                debtPaymentsInPeriod,
+                otherAndDebt: dailyExpenses + debtPaymentsInPeriod,
+                totalSpent,
+                remaining
+            };
+        }
+
+        // =====================================================
+        // PUNTO 1: GESTIÓN DE SALARIO Y GASTOS HORMIGA
+        // =====================================================
+        function saveSalaryConfig(e) {
+            e.preventDefault();
+            const period = document.getElementById('income-period').value;
+            const amount = parseFloat(document.getElementById('income-amount').value) || 0;
+
+            appState.income.period = period;
+            appState.income.amount = amount;
+            saveState();
+            showToast(`Salario ${period.toLowerCase()} actualizado a ${formatMXN(amount)}`);
+        }
+
+        function quickFillAnt(concept, category, amount) {
+            document.getElementById('exp-concept').value = concept;
+            document.getElementById('exp-category').value = category;
+            document.getElementById('exp-amount').value = amount;
+            document.getElementById('exp-amount').focus();
+        }
+
+        function addExpense(e) {
+            e.preventDefault();
+            const concept = document.getElementById('exp-concept').value.trim();
+            const category = document.getElementById('exp-category').value;
+            const amount = parseFloat(document.getElementById('exp-amount').value);
+            const date = document.getElementById('exp-date').value || getTodayISO();
+
+            if (!concept || isNaN(amount) || amount <= 0) return;
+
+            const isAnt = ANT_CATEGORIES.includes(category);
+
+            appState.expenses.unshift({
+                id: 'exp-' + Date.now(),
+                concept,
+                category,
+                amount,
+                date,
+                isAnt
+            });
+
+            document.getElementById('exp-concept').value = '';
+            document.getElementById('exp-amount').value = '';
+            saveState();
+
+            if (isAnt) {
+                showToast(`🐜 Gasto hormiga registrado: -${formatMXN(amount)}`, 'warning');
+            } else {
+                showToast(`Gasto registrado: -${formatMXN(amount)}`);
+            }
+        }
+
+        function deleteExpense(id) {
+            appState.expenses = appState.expenses.filter(item => item.id !== id);
+            saveState();
+            showToast('Gasto eliminado y saldo actualizado', 'danger');
+        }
+
+        function setExpenseFilter(filter) {
+            currentExpenseFilter = filter;
+            ['all', 'ant', 'daily'].forEach(f => {
+                const btn = document.getElementById(`filter-exp-${f}`);
+                if (f === filter) {
+                    btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-slate-900 shadow-sm transition';
+                } else {
+                    btn.className = 'px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition';
+                }
+            });
+            renderExpensesList();
+        }
+
+        function renderExpensesList() {
+            const container = document.getElementById('expenses-list');
+            let filtered = appState.expenses;
+
+            if (currentExpenseFilter === 'ant') {
+                filtered = appState.expenses.filter(e => e.isAnt || ANT_CATEGORIES.includes(e.category));
+            } else if (currentExpenseFilter === 'daily') {
+                filtered = appState.expenses.filter(e => !e.isAnt && !ANT_CATEGORIES.includes(e.category));
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-10 px-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <i class="fa-solid fa-receipt text-2xl text-slate-300 mb-2"></i>
+                        <p class="text-sm font-medium text-slate-600">No hay gastos registrados en esta vista</p>
+                        <p class="text-xs text-slate-400 mt-0.5">Registra tus cafés, antojos o pasajes para llevar el control exacto.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const categoryBadges = {
+                'Antojo': { icon: '🍫', label: 'Hormiga: Antojo', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+                'Cafe': { icon: '☕', label: 'Hormiga: Café/Bebida', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+                'Propina': { icon: '🪙', label: 'Hormiga: Propina', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+                'Comision': { icon: '💳', label: 'Hormiga: Comisión/App', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+                'Impulso': { icon: '🛍️', label: 'Hormiga: Impulso', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+                'Transporte': { icon: '🚌', label: 'Transporte', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+                'Servicios': { icon: '💡', label: 'Servicios', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+                'Salud': { icon: '💊', label: 'Salud', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+                'Hogar': { icon: '🏠', label: 'Hogar/Fijo', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
+                'AbonoDeuda': { icon: '🤝', label: 'Abono a Deuda', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' }
+            };
+
+            container.innerHTML = filtered.map(exp => {
+                const badge = categoryBadges[exp.category] || { icon: '📌', label: exp.category, cls: 'bg-slate-100 text-slate-700 border-slate-200' };
+                return `
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100/80 border border-slate-200/70 transition">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-base shrink-0 shadow-sm">
+                                ${badge.icon}
+                            </div>
+                            <div class="min-w-0">
+                                <p class="text-sm font-bold text-slate-900 truncate">${escapeHTML(exp.concept)}</p>
+                                <div class="flex flex-wrap items-center gap-2 mt-0.5">
+                                    <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge.cls}">${badge.label}</span>
+                                    <span class="text-[11px] text-slate-400">${exp.date}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 shrink-0 ml-2">
+                            <span class="text-sm font-extrabold ${exp.isAnt ? 'text-rose-600' : 'text-slate-900'}">-${formatMXN(exp.amount)}</span>
+                            <button onclick="deleteExpense('${exp.id}')" title="Eliminar gasto" class="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // =====================================================
+        // PUNTO 2: PLANIFICADOR DE COMIDAS (LUNES A DOMINGO)
+        // =====================================================
+        function selectDay(day) {
+            selectedDay = day;
+            renderMealsSection();
+        }
+
+        function toggleDeductMeals() {
+            const checked = document.getElementById('deduct-meals-toggle').checked;
+            appState.settings.deductMealsFromBalance = checked;
+            saveState();
+            showToast(checked ? 'Las comidas se descuentan de tu saldo' : 'Las comidas no se descuentan del saldo');
+        }
+
+        function addDraftIngredient() {
+            const nameInput = document.getElementById('draft-ing-name');
+            const costInput = document.getElementById('draft-ing-cost');
+            const name = nameInput.value.trim();
+            const cost = parseFloat(costInput.value) || 0;
+
+            if (!name) {
+                showToast('Escribe el nombre del producto a comprar', 'warning');
+                nameInput.focus();
+                return;
+            }
+
+            draftIngredients.push({
+                id: 'ing-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+                name,
+                cost: cost >= 0 ? cost : 0,
+                bought: false
+            });
+
+            nameInput.value = '';
+            costInput.value = '';
+            nameInput.focus();
+            renderDraftIngredients();
+        }
+
+        function removeDraftIngredient(id) {
+            draftIngredients = draftIngredients.filter(i => i.id !== id);
+            renderDraftIngredients();
+        }
+
+        function renderDraftIngredients() {
+            const list = document.getElementById('draft-ingredients-list');
+            const subtotalEl = document.getElementById('draft-meal-subtotal');
+            const subtotal = draftIngredients.reduce((acc, item) => acc + (Number(item.cost) || 0), 0);
+            subtotalEl.textContent = `Subtotal: ${formatMXN(subtotal)}`;
+
+            if (draftIngredients.length === 0) {
+                list.innerHTML = `<p class="text-[11px] text-slate-400 italic py-1">Aún no has añadido productos a este platillo.</p>`;
+                return;
+            }
+
+            list.innerHTML = draftIngredients.map(ing => `
+                <div class="flex items-center justify-between bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs">
+                    <span class="font-medium text-slate-700 truncate">${escapeHTML(ing.name)}</span>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="font-bold text-slate-900">${formatMXN(ing.cost)}</span>
+                        <button type="button" onclick="removeDraftIngredient('${ing.id}')" class="text-rose-500 hover:text-rose-700">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addMealToDay(e) {
+            e.preventDefault();
+            const type = document.getElementById('meal-type').value;
+            const name = document.getElementById('meal-name').value.trim();
+
+            // Si el usuario dejó un ingrediente escrito en los inputs sin darle a "+ Añadir", lo sumamos automáticamente
+            const pendingIngName = document.getElementById('draft-ing-name').value.trim();
+            const pendingIngCost = parseFloat(document.getElementById('draft-ing-cost').value) || 0;
+            if (pendingIngName) {
+                draftIngredients.push({
+                    id: 'ing-' + Date.now(),
+                    name: pendingIngName,
+                    cost: pendingIngCost >= 0 ? pendingIngCost : 0,
+                    bought: false
+                });
+            }
+
+            if (!name) return;
+
+            if (!appState.meals[selectedDay]) {
+                appState.meals[selectedDay] = [];
+            }
+
+            appState.meals[selectedDay].push({
+                id: 'meal-' + Date.now(),
+                type,
+                name,
+                ingredients: [...draftIngredients]
+            });
+
+            // Limpiar formulario
+            document.getElementById('meal-name').value = '';
+            document.getElementById('draft-ing-name').value = '';
+            document.getElementById('draft-ing-cost').value = '';
+            draftIngredients = [];
+            renderDraftIngredients();
+
+            saveState();
+            showToast(`Platillo agregado al ${selectedDay}`);
+        }
+
+        function addIngredientToExistingMeal(day, mealId, event) {
+            event.preventDefault();
+            const nameInput = document.getElementById(`new-ing-name-${mealId}`);
+            const costInput = document.getElementById(`new-ing-cost-${mealId}`);
+            const name = nameInput.value.trim();
+            const cost = parseFloat(costInput.value) || 0;
+
+            if (!name) return;
+
+            const meal = (appState.meals[day] || []).find(m => m.id === mealId);
+            if (meal) {
+                meal.ingredients.push({
+                    id: 'ing-' + Date.now(),
+                    name,
+                    cost: cost >= 0 ? cost : 0,
+                    bought: false
+                });
+                saveState();
+                showToast(`Producto añadido a ${meal.name}`);
+            }
+        }
+
+        function toggleIngredientBought(day, mealId, ingId) {
+            const meal = (appState.meals[day] || []).find(m => m.id === mealId);
+            if (!meal) return;
+            const ing = meal.ingredients.find(i => i.id === ingId);
+            if (ing) {
+                ing.bought = !ing.bought;
+                saveState();
+                // Si el modal de lista de compras está abierto, actualizarlo también
+                if (!document.getElementById('shopping-modal').classList.contains('hidden')) {
+                    renderShoppingModalList();
+                }
+            }
+        }
+
+        function deleteIngredientFromMeal(day, mealId, ingId) {
+            const meal = (appState.meals[day] || []).find(m => m.id === mealId);
+            if (!meal) return;
+            meal.ingredients = meal.ingredients.filter(i => i.id !== ingId);
+            saveState();
+        }
+
+        function deleteMealFromDay(day, mealId) {
+            appState.meals[day] = (appState.meals[day] || []).filter(m => m.id !== mealId);
+            saveState();
+            showToast('Comida eliminada del día', 'danger');
+        }
+
+        function renderMealsSection() {
+            document.getElementById('deduct-meals-toggle').checked = !!appState.settings.deductMealsFromBalance;
+            document.getElementById('form-selected-day-label').textContent = selectedDay;
+            document.getElementById('btn-selected-day-label').textContent = selectedDay;
+            document.getElementById('view-selected-day-title').textContent = selectedDay;
+            document.getElementById('stat-day-name').textContent = selectedDay;
+
+            // Renderizar selector de Lunes a Domingo con subtotal por día
+            const daysContainer = document.getElementById('days-selector-container');
+            let weekGrandTotal = 0;
+            let totalMealsRegistered = 0;
+
+            daysContainer.innerHTML = DAYS_OF_WEEK.map(day => {
+                const meals = appState.meals[day] || [];
+                const dayCost = meals.reduce((sum, m) => {
+                    totalMealsRegistered++;
+                    return sum + (m.ingredients || []).reduce((s, i) => s + (Number(i.cost) || 0), 0);
+                }, 0);
+                weekGrandTotal += dayCost;
+
+                const isSelected = day === selectedDay;
+                return `
+                    <button onclick="selectDay('${day}')" class="${isSelected ? 'day-active shadow-md' : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'} border rounded-2xl p-3 text-left transition flex flex-col justify-between">
+                        <div class="flex items-center justify-between w-full">
+                            <span class="text-xs font-bold">${day}</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}">${meals.length} platillos</span>
+                        </div>
+                        <p class="text-sm font-extrabold mt-2 ${isSelected ? 'text-emerald-300' : 'text-slate-900'}">${formatMXN(dayCost)}</p>
+                    </button>
+                `;
+            }).join('');
+
+            // Renderizar platillos del día seleccionado
+            const currentDayMeals = appState.meals[selectedDay] || [];
+            const currentDayTotal = currentDayMeals.reduce((sum, m) => sum + (m.ingredients || []).reduce((s, i) => s + (Number(i.cost) || 0), 0), 0);
+
+            document.getElementById('view-selected-day-total').textContent = formatMXN(currentDayTotal);
+            document.getElementById('stat-day-total').textContent = formatMXN(currentDayTotal);
+            document.getElementById('stat-week-total').textContent = formatMXN(weekGrandTotal);
+            document.getElementById('stat-avg-meal').textContent = formatMXN(totalMealsRegistered > 0 ? weekGrandTotal / totalMealsRegistered : 0);
+
+            const mealsContainer = document.getElementById('day-meals-container');
+            if (currentDayMeals.length === 0) {
+                mealsContainer.innerHTML = `
+                    <div class="flex-1 flex flex-col items-center justify-center text-center py-12 px-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                        <div class="w-12 h-12 rounded-2xl bg-orange-100 text-orange-500 flex items-center justify-center text-xl mb-3">
+                            <i class="fa-solid fa-plate-wheat"></i>
+                        </div>
+                        <p class="text-sm font-bold text-slate-700">No hay comidas registradas para el ${selectedDay}</p>
+                        <p class="text-xs text-slate-400 max-w-sm mt-1">Usa el formulario de la izquierda para añadir tu Desayuno, Comida o Cena junto con los productos que necesitas comprar.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const mealTypeBadge = {
+                'Desayuno': '🍳 Desayuno',
+                'Comida': '🍲 Comida',
+                'Cena': '🌮 Cena',
+                'Colación': '🍎 Colación'
+            };
+
+            mealsContainer.innerHTML = currentDayMeals.map(meal => {
+                const mealTotal = (meal.ingredients || []).reduce((s, i) => s + (Number(i.cost) || 0), 0);
+                return `
+                    <div class="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+                        <div class="flex items-start justify-between gap-2">
+                            <div>
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-orange-700 bg-orange-100 px-2.5 py-0.5 rounded-full">
+                                    ${mealTypeBadge[meal.type] || meal.type}
+                                </span>
+                                <h4 class="text-base font-bold text-slate-900 mt-1">${escapeHTML(meal.name)}</h4>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="text-right">
+                                    <span class="text-[10px] text-slate-400 uppercase block">Costo de esta comida</span>
+                                    <span class="text-base font-extrabold text-emerald-700">${formatMXN(mealTotal)}</span>
+                                </div>
+                                <button onclick="deleteMealFromDay('${selectedDay}', '${meal.id}')" title="Eliminar comida" class="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-200 flex items-center justify-center transition">
+                                    <i class="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Lista de ingredientes / productos de esta comida -->
+                        <div class="space-y-1.5 pt-1">
+                            <p class="text-[11px] font-semibold text-slate-500">Productos requeridos para preparar este platillo:</p>
+                            ${(meal.ingredients || []).length === 0 ? `
+                                <p class="text-xs text-slate-400 italic">Sin ingredientes registrados aún.</p>
+                            ` : (meal.ingredients || []).map(ing => `
+                                <div class="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-slate-200/80 text-xs">
+                                    <label class="flex items-center gap-2.5 cursor-pointer min-w-0 flex-1">
+                                        <input type="checkbox" ${ing.bought ? 'checked' : ''} onchange="toggleIngredientBought('${selectedDay}', '${meal.id}', '${ing.id}')"
+                                            class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
+                                        <span class="${ing.bought ? 'line-through text-slate-400' : 'text-slate-700 font-medium'} truncate">
+                                            ${escapeHTML(ing.name)}
+                                        </span>
+                                    </label>
+                                    <div class="flex items-center gap-2.5 shrink-0 ml-2">
+                                        <span class="font-bold ${ing.bought ? 'text-slate-400' : 'text-slate-900'}">${formatMXN(ing.cost)}</span>
+                                        <button onclick="deleteIngredientFromMeal('${selectedDay}', '${meal.id}', '${ing.id}')" class="text-slate-300 hover:text-rose-600">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <!-- Agregar producto directo a esta comida -->
+                        <form onsubmit="addIngredientToExistingMeal('${selectedDay}', '${meal.id}', event)" class="flex gap-2 pt-1">
+                            <input type="text" id="new-ing-name-${meal.id}" required
+                                class="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                placeholder="+ Agregar otro ingrediente o producto...">
+                            <input type="number" id="new-ing-cost-${meal.id}" step="0.5" min="0" required
+                                class="w-24 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold bg-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                placeholder="$ Costo">
+                            <button type="submit" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl transition shrink-0">
+                                Añadir
+                            </button>
+                        </form>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Modal de Lista de Supermercado Semanal
+        function openShoppingModal() {
+            renderShoppingModalList();
+            const modal = document.getElementById('shopping-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeShoppingModal() {
+            const modal = document.getElementById('shopping-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function renderShoppingModalList() {
+            const container = document.getElementById('shopping-list-container');
+            let allItems = [];
+            let totalCost = 0;
+            let checkedCost = 0;
+
+            DAYS_OF_WEEK.forEach(day => {
+                (appState.meals[day] || []).forEach(meal => {
+                    (meal.ingredients || []).forEach(ing => {
+                        const c = Number(ing.cost) || 0;
+                        totalCost += c;
+                        if (ing.bought) checkedCost += c;
+                        allItems.push({
+                            day,
+                            mealId: meal.id,
+                            mealName: meal.name,
+                            ...ing
+                        });
+                    });
+                });
+            });
+
+            document.getElementById('shopping-modal-total').textContent = formatMXN(totalCost);
+            document.getElementById('shopping-modal-checked').textContent = `(${formatMXN(checkedCost)} ya comprados)`;
+
+            if (allItems.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-10">
+                        <p class="text-sm text-slate-500">Aún no hay ingredientes registrados en tu semana.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = allItems.map(item => `
+                <label class="flex items-center justify-between p-3 rounded-xl border ${item.bought ? 'bg-slate-50 border-slate-200/60' : 'bg-white border-slate-200'} cursor-pointer hover:border-emerald-300 transition">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <input type="checkbox" ${item.bought ? 'checked' : ''} onchange="toggleIngredientBought('${item.day}', '${item.mealId}', '${item.id}')"
+                            class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold ${item.bought ? 'line-through text-slate-400' : 'text-slate-800'} truncate">${escapeHTML(item.name)}</p>
+                            <p class="text-[11px] text-slate-400">${item.day} • ${escapeHTML(item.mealName)}</p>
+                        </div>
+                    </div>
+                    <span class="text-sm font-bold ${item.bought ? 'text-slate-400' : 'text-emerald-700'} shrink-0 ml-3">${formatMXN(item.cost)}</span>
+                </label>
+            `).join('');
+        }
+
+        // =====================================================
+        // PUNTO 3: CONTROL DE DEUDAS Y ABONOS
+        // =====================================================
+        function addDebt(e) {
+            e.preventDefault();
+            const name = document.getElementById('debt-name').value.trim();
+            const totalAmount = parseFloat(document.getElementById('debt-total').value) || 0;
+            const paidAmount = parseFloat(document.getElementById('debt-paid').value) || 0;
+            const dueDate = document.getElementById('debt-due').value.trim();
+
+            if (!name || totalAmount <= 0) return;
+
+            appState.debts.push({
+                id: 'debt-' + Date.now(),
+                name,
+                totalAmount,
+                paidAmount: Math.min(paidAmount, totalAmount),
+                dueDate: dueDate || 'Sin fecha fija'
+            });
+
+            document.getElementById('debt-name').value = '';
+            document.getElementById('debt-total').value = '';
+            document.getElementById('debt-paid').value = '0';
+            document.getElementById('debt-due').value = '';
+
+            saveState();
+            showToast(`Deuda "${name}" agregada al control`);
+        }
+
+        function openPaymentModal(debtId) {
+            const debt = appState.debts.find(d => d.id === debtId);
+            if (!debt) return;
+
+            const remaining = Math.max(0, debt.totalAmount - debt.paidAmount);
+            document.getElementById('payment-debt-id').value = debt.id;
+            document.getElementById('payment-debt-name').textContent = `${debt.name} (Restante: ${formatMXN(remaining)})`;
+            document.getElementById('payment-amount').value = '';
+            document.getElementById('payment-amount').max = remaining;
+            document.getElementById('payment-remaining-hint').textContent = `Monto pendiente para liquidar: ${formatMXN(remaining)}`;
+
+            const modal = document.getElementById('payment-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closePaymentModal() {
+            const modal = document.getElementById('payment-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function submitDebtPayment(e) {
+            e.preventDefault();
+            const debtId = document.getElementById('payment-debt-id').value;
+            const amount = parseFloat(document.getElementById('payment-amount').value) || 0;
+            const deduct = document.getElementById('payment-deduct-balance').checked;
+
+            const debt = appState.debts.find(d => d.id === debtId);
+            if (!debt || amount <= 0) return;
+
+            debt.paidAmount = Math.min(debt.totalAmount, (Number(debt.paidAmount) || 0) + amount);
+
+            if (deduct) {
+                appState.expenses.unshift({
+                    id: 'exp-debt-' + Date.now(),
+                    concept: `Abono a deuda: ${debt.name}`,
+                    category: 'AbonoDeuda',
+                    amount,
+                    date: getTodayISO(),
+                    isAnt: false
+                });
+            }
+
+            closePaymentModal();
+            saveState();
+            showToast(`Abono de ${formatMXN(amount)} registrado con éxito`);
+        }
+
+        function deleteDebt(id) {
+            appState.debts = appState.debts.filter(d => d.id !== id);
+            saveState();
+            showToast('Deuda eliminada de la lista', 'danger');
+        }
+
+        function renderDebtsSection() {
+            let totalInitial = 0;
+            let totalPaid = 0;
+
+            appState.debts.forEach(d => {
+                totalInitial += Number(d.totalAmount) || 0;
+                totalPaid += Number(d.paidAmount) || 0;
+            });
+
+            const totalRemaining = Math.max(0, totalInitial - totalPaid);
+            document.getElementById('debt-total-initial').textContent = formatMXN(totalInitial);
+            document.getElementById('debt-total-paid').textContent = formatMXN(totalPaid);
+            document.getElementById('debt-total-remaining').textContent = formatMXN(totalRemaining);
+            document.getElementById('debt-active-count').textContent = `${appState.debts.filter(d => d.totalAmount > d.paidAmount).length} deudas pendientes por liquidar`;
+
+            const container = document.getElementById('debts-list');
+            if (appState.debts.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 px-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                        <i class="fa-solid fa-Face-smile-beam text-2xl text-emerald-500 mb-2"></i>
+                        <p class="text-sm font-bold text-slate-700">No tienes deudas registradas</p>
+                        <p class="text-xs text-slate-400 mt-1">Si tienes tarjetas, préstamos o pagos pendientes, regístralos a la izquierda para controlar tus abonos.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = appState.debts.map(debt => {
+                const total = Number(debt.totalAmount) || 1;
+                const paid = Number(debt.paidAmount) || 0;
+                const remaining = Math.max(0, total - paid);
+                const percent = Math.min(100, Math.round((paid / total) * 100));
+                const isPaidOff = remaining <= 0;
+
+                return `
+                    <div class="p-4 rounded-2xl border ${isPaidOff ? 'bg-emerald-50/40 border-emerald-200' : 'bg-slate-50 border-slate-200/80'} space-y-3">
+                        <div class="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="font-bold text-slate-900 text-base">${escapeHTML(debt.name)}</h4>
+                                    ${isPaidOff ? `<span class="text-[10px] font-bold uppercase bg-emerald-600 text-white px-2 py-0.5 rounded-full">¡Liquidada!</span>` : ''}
+                                </div>
+                                <p class="text-xs text-slate-500 mt-0.5"><i class="fa-regular fa-calendar mr-1"></i> Fecha de pago: <strong>${escapeHTML(debt.dueDate)}</strong></p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                ${!isPaidOff ? `
+                                    <button onclick="openPaymentModal('${debt.id}')" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm flex items-center gap-1.5">
+                                        <i class="fa-solid fa-plus"></i> Registrar Abono
+                                    </button>
+                                ` : ''}
+                                <button onclick="deleteDebt('${debt.id}')" class="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-rose-600 flex items-center justify-center transition">
+                                    <i class="fa-solid fa-trash-can text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2 text-xs bg-white p-3 rounded-xl border border-slate-200/60">
+                            <div>
+                                <span class="text-slate-400 block">Deuda Total</span>
+                                <strong class="text-slate-800 text-sm">${formatMXN(total)}</strong>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block">Abonado</span>
+                                <strong class="text-emerald-600 text-sm">${formatMXN(paid)}</strong>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block">Falta por Pagar</span>
+                                <strong class="text-rose-600 text-sm">${formatMXN(remaining)}</strong>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-xs font-semibold mb-1">
+                                <span class="text-slate-500">Avance de liquidación</span>
+                                <span class="text-emerald-700 font-bold">${percent}% pagado</span>
+                            </div>
+                            <div class="w-full h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // =====================================================
+        // PUNTO 4: ZONA DE TIPS Y HÁBITOS DE AHORRO
+        // =====================================================
+        function addCustomHabit(e) {
+            e.preventDefault();
+            const input = document.getElementById('new-habit-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            appState.habits.unshift({
+                id: 'hab-' + Date.now(),
+                text,
+                completed: false
+            });
+
+            input.value = '';
+            saveState();
+            showToast('Nuevo hábito de ahorro agregado');
+        }
+
+        function toggleHabit(id) {
+            const habit = appState.habits.find(h => h.id === id);
+            if (habit) {
+                habit.completed = !habit.completed;
+                saveState();
+            }
+        }
+
+        function deleteHabit(id) {
+            appState.habits = appState.habits.filter(h => h.id !== id);
+            saveState();
+        }
+
+        function renderHabitsSection() {
+            const list = document.getElementById('habits-list');
+            const badge = document.getElementById('habits-progress-badge');
+            const completedCount = appState.habits.filter(h => h.completed).length;
+            badge.textContent = `${completedCount}/${appState.habits.length} cumplidos`;
+
+            if (appState.habits.length === 0) {
+                list.innerHTML = `<p class="text-xs text-slate-400 italic py-4 text-center">Agrega tus propias reglas personales para evitar gastos innecesarios.</p>`;
+                return;
+            }
+
+            list.innerHTML = appState.habits.map(h => `
+                <div class="flex items-center justify-between p-3 rounded-xl border ${h.completed ? 'bg-emerald-50/60 border-emerald-200' : 'bg-slate-50 border-slate-200/80'} transition">
+                    <label class="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
+                        <input type="checkbox" ${h.completed ? 'checked' : ''} onchange="toggleHabit('${h.id}')"
+                            class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500">
+                        <span class="text-xs sm:text-sm ${h.completed ? 'line-through text-slate-400' : 'text-slate-800 font-medium'}">${escapeHTML(h.text)}</span>
+                    </label>
+                    <button onclick="deleteHabit('${h.id}')" class="text-slate-300 hover:text-rose-600 ml-2 px-2">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Reiniciar Periodo (Limpia gastos del periodo pero conserva salario, deudas y hábitos)
+        function confirmNewPeriod() {
+            openConfirmModal(
+                'Iniciar Nueva Quincena / Periodo',
+                'Se limpiará el historial de gastos hormiga/diarios del periodo actual y se desmarcarán los ingredientes comprados para que inicies tu nuevo periodo limpio. Tus deudas, menú y salario se conservarán.',
+                () => {
+                    appState.expenses = [];
+                    DAYS_OF_WEEK.forEach(d => {
+                        (appState.meals[d] || []).forEach(m => {
+                            (m.ingredients || []).forEach(i => i.bought = false);
+                        });
+                    });
+                    saveState();
+                    showToast('¡Nuevo periodo iniciado con saldo limpio!');
+                }
+            );
+        }
+
+        // Exportar e Importar JSON
+        function exportDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
+            const dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", dataStr);
+            dlAnchor.setAttribute("download", `respaldo_mi_economia_${getTodayISO()}.json`);
+            document.body.appendChild(dlAnchor);
+            dlAnchor.click();
+            dlAnchor.remove();
+            showToast('Respaldo descargado correctamente');
+        }
+
+        function importDataJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (imported && imported.income && imported.meals) {
+                        appState = imported;
+                        saveState();
+                        showToast('Datos restaurados con éxito');
+                    } else {
+                        showToast('El archivo no tiene el formato válido', 'danger');
+                    }
+                } catch (err) {
+                    showToast('Error al leer el archivo de respaldo', 'danger');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function escapeHTML(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // =====================================================
+        // RENDERIZADO GENERAL DEL DASHBOARD Y TODAS LAS VISTAS
+        // =====================================================
+        function renderAll() {
+            const totals = calculateTotals();
+
+            // Sincronizar inputs de salario
+            document.getElementById('income-period').value = appState.income.period;
+            document.getElementById('income-amount').value = appState.income.amount;
+
+            // Encabezados del periodo
+            document.getElementById('current-period-badge').innerHTML = `<i class="fa-solid fa-calendar-check"></i> Modalidad: ${appState.income.period}`;
+            document.getElementById('card-period-label').textContent = appState.income.period;
+
+            // Tarjetas superiores
+            document.getElementById('summary-income').textContent = formatMXN(totals.income);
+            document.getElementById('summary-meals').textContent = formatMXN(totals.totalMealsCost);
+            document.getElementById('summary-meals-status').textContent = appState.settings.deductMealsFromBalance
+                ? 'Descontando de tu saldo'
+                : 'Sin descontar (modo vista)';
+
+            document.getElementById('summary-ant').textContent = formatMXN(totals.antExpenses);
+            const antPercent = totals.income > 0 ? ((totals.antExpenses / totals.income) * 100).toFixed(1) : 0;
+            document.getElementById('summary-ant-percent').textContent = `${antPercent}% de tu ingreso`;
+
+            document.getElementById('summary-other-debt').textContent = formatMXN(totals.otherAndDebt);
+            document.getElementById('summary-debt-sub').textContent = `Abonos deuda: ${formatMXN(totals.debtPaymentsInPeriod)}`;
+
+            document.getElementById('summary-remaining').textContent = formatMXN(totals.remaining);
+            document.getElementById('shopping-count-badge').textContent = totals.totalIngredientsCount;
+
+            // Cálculo de días según el periodo para sugerencia diaria
+            const periodDaysMap = { 'Diario': 1, 'Semanal': 7, 'Quincenal': 15, 'Mensual': 30 };
+            const daysInPeriod = periodDaysMap[appState.income.period] || 15;
+            const dailyAllowance = totals.remaining > 0 ? totals.remaining / daysInPeriod : 0;
+            document.getElementById('summary-daily-allowance').textContent = totals.remaining >= 0
+                ? `~${formatMXN(dailyAllowance)} libres por día`
+                : `Has excedido tu presupuesto`;
+
+            // Barra de Progreso del Saldo Restante
+            const freePercent = totals.income > 0 ? Math.max(0, Math.min(100, Math.round((totals.remaining / totals.income) * 100))) : 0;
+            const bar = document.getElementById('balance-progress-bar');
+            const pctText = document.getElementById('balance-percentage-text');
+            const warnMsg = document.getElementById('balance-warning-msg');
+            const remCard = document.getElementById('remaining-card');
+
+            bar.style.width = `${freePercent}%`;
+            pctText.textContent = `${freePercent}% libre`;
+
+            if (totals.remaining < 0) {
+                bar.className = 'h-full bg-rose-600 transition-all duration-500 rounded-full';
+                pctText.className = 'text-rose-600 font-bold';
+                warnMsg.textContent = '¡Cuidado! Tus gastos han superado el ingreso configurado.';
+                remCard.className = 'col-span-2 md:col-span-1 bg-rose-600 text-white rounded-xl p-3.5 shadow-md flex flex-col justify-between';
+            } else if (freePercent <= 20) {
+                bar.className = 'h-full bg-amber-500 transition-all duration-500 rounded-full';
+                pctText.className = 'text-amber-600 font-bold';
+                warnMsg.textContent = 'Atención: Te queda menos del 20% de tu ingreso disponible.';
+                remCard.className = 'col-span-2 md:col-span-1 bg-amber-600 text-white rounded-xl p-3.5 shadow-md flex flex-col justify-between';
+            } else {
+                bar.className = 'h-full bg-emerald-500 transition-all duration-500 rounded-full';
+                pctText.className = 'text-emerald-600 font-bold';
+                warnMsg.textContent = 'Tu presupuesto se encuentra saludable.';
+                remCard.className = 'col-span-2 md:col-span-1 bg-emerald-600 text-white rounded-xl p-3.5 shadow-md shadow-emerald-600/20 flex flex-col justify-between';
+            }
+
+            // Detector de Gastos Hormiga
+            document.getElementById('ant-detector-total').textContent = formatMXN(totals.antExpenses);
+            document.getElementById('ant-detector-percent').textContent = `${antPercent}%`;
+            const avgMealCost = totals.totalMealsCount > 0 ? (totals.totalMealsCost / totals.totalMealsCount) : 65;
+            const eqMeals = avgMealCost > 0 ? (totals.antExpenses / avgMealCost).toFixed(1) : 0;
+            document.getElementById('ant-detector-meals-eq').textContent = `${eqMeals} comidas caseras`;
+
+            const multiplierMap = { 'Diario': 30, 'Semanal': 4, 'Quincenal': 2, 'Mensual': 1 };
+            const monthlyProjection = totals.antExpenses * (multiplierMap[appState.income.period] || 2);
+            document.getElementById('ant-detector-projection').textContent = formatMXN(monthlyProjection);
+
+            // Renderizar listas de cada sección
+            renderExpensesList();
+            renderMealsSection();
+            renderDebtsSection();
+            renderHabitsSection();
+        }
+
+        // Inicialización al cargar la ventana
+        window.onload = function () {
+            document.getElementById('exp-date').value = getTodayISO();
+            renderDraftIngredients();
+            renderAll();
+        };
+    </script>
+</body>
+</html>
